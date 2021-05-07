@@ -1,6 +1,8 @@
 from http.server import SimpleHTTPRequestHandler, HTTPServer, HTTPStatus
 from pathlib import Path
 import os
+import json
+import threading
 
 PORT = 6337
 IMAGE_PATH = '../data/coco/images/'
@@ -49,10 +51,42 @@ class Handler(SimpleHTTPRequestHandler):
 	def send_response(self, code, message=None):
 		super().send_response(code, message)
 
+vehicles_list = []
+vehicles_mutex = threading.Lock()
+class ApiHandler(Handler):
+    global vehicles_list
+    global vehicles_mutex
+    def do_GET(self):
+        if self.path == '/api/v1/vehicles.json':
+            vehicles_mutex.acquire()
+            vehicles_dict = {'vehicles': vehicles_list}
+            vehicles_mutex.release()
+            self.send_json(json.dumps(vehicles_dict))
+        else:
+            SimpleHTTPRequestHandler.send_error(self, HTTPStatus.NOT_FOUND, 'cannot found ' + self.path)
 
-with HTTPServer(('', PORT), Handler) as httpd:
-	print('Serving at port', PORT)
-	try:
-		httpd.serve_forever()
-	except KeyboardInterrupt:
-		pass
+    def send_json(self, json_data):
+        self.send_response(HTTPStatus.OK)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json_data.encode())
+
+httpd = None
+
+def startHttpServer(request_handler):
+    global httpd
+    httpd = HTTPServer(('', PORT), request_handler)
+    print('Serving at port', PORT)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+def stopHttpServer():
+    global httpd
+    if httpd is not None:
+        print('Stop server')
+        httpd.shutdown()
+
+if __name__ == '__main__':
+    startHttpServer(Handler)
