@@ -37,14 +37,11 @@ Some examples from our YOLACT base model (33.5 fps on a Titan Xp and 29.8 mAP on
  - Set up the environment using one of the following methods:
    - Using [Anaconda](https://www.anaconda.com/distribution/)
      - Run `conda env create -f environment.yml` or `conda env create -f environment_win.yml` on Windows
-   - Manually with pip
-     - Set up a Python3 environment (e.g., using virtenv).
-     - Install [Pytorch](http://pytorch.org/) 1.0.1 (or higher) and TorchVision.
-     - Install some other packages:
+   - Using Pipenv
        ```Shell
-       # Cython needs to be installed before pycocotools
-       pip install cython
-       pip install opencv-python pillow pycocotools matplotlib 
+       sudo apt-get update
+       sudo apt-get install pipenv python3-tk
+       pipenv install --skip-lock
        ```
  - If you'd like to train YOLACT, download the COCO dataset and the 2014/2017 annotations. Note that this script will take a while and dump 21gb of files into `./data/coco`.
    ```Shell
