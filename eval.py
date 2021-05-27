@@ -310,6 +310,24 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         cv2.imshow('masks_contours_img', masks_contours_img)
         '''
 
+        for contour in masks_contours:
+            ellipse = cv2.fitEllipse(contour)
+            ellipse_center_x = ellipse[0][0]
+            ellipse_center_y = ellipse[0][1]
+            ellipse_minor_axis = ellipse[1][0]
+            ellipse_majo_axis = ellipse[1][1]
+            ellipse_angle = ellipse[2]
+            if dbg:
+                print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
+                print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
+                print('=> Ellipse major axis length: %f' % (ellipse_majo_axis))
+                print('=> Ellipse angle: %f (degree)' % (ellipse_angle))
+            '''
+            print(ellipse)
+            drawing_color_bgr = (0, 255, 0)
+            cv2.ellipse(img_numpy, ellipse, drawing_color_bgr, thickness)
+            '''
+
     if args.projection_estimation:
         if args.video is not None:
             dbg = False
