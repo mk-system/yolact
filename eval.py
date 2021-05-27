@@ -299,6 +299,17 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         print(masks_bin_img.dtype)
         '''
 
+        masks_contours, contours_hierarchy = cv2.findContours(
+                masks_bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        '''
+        masks_contours_img = np.zeros(masks_bin_img.shape, dtype='uint8')
+        contourIdx = -1 # If it is negative, all the contours are drawn.
+        color = 255 # White
+        thickness = 1
+        cv2.drawContours(masks_contours_img, masks_contours, contourIdx, color, thickness)
+        cv2.imshow('masks_contours_img', masks_contours_img)
+        '''
+
     if args.projection_estimation:
         if args.video is not None:
             dbg = False
