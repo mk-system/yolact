@@ -35,6 +35,8 @@ import utils.aruco_pose_est as ar_pose_est
 import web.server as web_server
 import threading
 
+from params import comm
+
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
@@ -314,13 +316,17 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             cv2.waitKey(0)
             '''
 
-            for contour in masks_contours:
-                ellipse = cv2.fitEllipse(contour)
+            # len(masks_contours) should be 1 but sometimes misjudgment will appear
+            for k in reversed(range(len(masks_contours))):
+                ellipse = cv2.fitEllipse(masks_contours[k])
                 ellipse_center_x = ellipse[0][0]
                 ellipse_center_y = ellipse[0][1]
                 ellipse_minor_axis = ellipse[1][0]
                 ellipse_majo_axis = ellipse[1][1]
                 ellipse_angle = ellipse[2]
+                if ellipse_majo_axis < comm.SCALE_CAR_WIDTH or ellipse_majo_axis > comm.SCALE_CAR_LENGTH:
+                    print('Warning: skip object %d contour %d' % (j, k))
+                    continue
                 if dbg:
                     print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
                     print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))

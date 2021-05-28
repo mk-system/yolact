@@ -1,0 +1,4 @@
+# Parameters of input image
+
+INPUT_IMAGE_WIDTH_PIXEL = 1224
+INPUT_IMAGE_HEIGHT_PIXEL = 1024
