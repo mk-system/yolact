@@ -284,49 +284,54 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             dbg = False
         else:
             dbg = True
-        if dbg:
-            print('Estimate the angle of detected object')
 
-        masks_clone = torch.zeros(0)
-        masks_clone = torch.reshape(masks[0], (masks.shape[1], masks.shape[2]))
-        masks_clone = masks_clone.byte() #masks_clone.to(torch.uint8)
-        masks_bin_img = masks_clone.cpu().numpy()
-        #masks_bin_img = masks_bin_img.astype(np.uint8)
-        '''
-        print("masks_bin_img.shape: ", end = '')
-        print(masks_bin_img.shape)
-        print("masks_bin_img.dtype: ", end = '')
-        print(masks_bin_img.dtype)
-        '''
-
-        masks_contours, contours_hierarchy = cv2.findContours(
-                masks_bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        '''
-        masks_contours_img = np.zeros(masks_bin_img.shape, dtype='uint8')
-        contourIdx = -1 # If it is negative, all the contours are drawn.
-        color = 255 # White
-        thickness = 1
-        cv2.drawContours(masks_contours_img, masks_contours, contourIdx, color, thickness)
-        cv2.imshow('masks_contours_img', masks_contours_img)
-        '''
-
-        for contour in masks_contours:
-            ellipse = cv2.fitEllipse(contour)
-            ellipse_center_x = ellipse[0][0]
-            ellipse_center_y = ellipse[0][1]
-            ellipse_minor_axis = ellipse[1][0]
-            ellipse_majo_axis = ellipse[1][1]
-            ellipse_angle = ellipse[2]
+        for j in reversed(range(num_dets_to_consider)):
             if dbg:
-                print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
-                print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
-                print('=> Ellipse major axis length: %f' % (ellipse_majo_axis))
-                print('=> Ellipse angle: %f (degree)' % (ellipse_angle))
+                print('Estimate the angle of detected object %d' % (j))
+
+            masks_clone = torch.zeros(0)
+            masks_clone = torch.reshape(masks[j], (masks[j].shape[0], masks[j].shape[1]))
+            masks_clone = masks_clone.byte() #masks_clone.to(torch.uint8)
+            masks_bin_img = masks_clone.cpu().numpy()
+            #masks_bin_img = masks_bin_img.astype(np.uint8)
             '''
-            print(ellipse)
-            drawing_color_bgr = (0, 255, 0)
-            cv2.ellipse(img_numpy, ellipse, drawing_color_bgr, thickness)
+            print("masks_bin_img.shape: ", end = '')
+            print(masks_bin_img.shape)
+            print("masks_bin_img.dtype: ", end = '')
+            print(masks_bin_img.dtype)
             '''
+
+            masks_contours, contours_hierarchy = cv2.findContours(
+                    masks_bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            '''
+            masks_contours_img = np.zeros(masks_bin_img.shape, dtype='uint8')
+            contourIdx = -1 # If it is negative, all the contours are drawn.
+            color = 255 # White
+            thickness = 1
+            cv2.drawContours(masks_contours_img, masks_contours, contourIdx, color, thickness)
+            cv2.imshow('masks_contours_img', masks_contours_img)
+            print('Press any key to continue...')
+            cv2.waitKey(0)
+            '''
+
+            for contour in masks_contours:
+                ellipse = cv2.fitEllipse(contour)
+                ellipse_center_x = ellipse[0][0]
+                ellipse_center_y = ellipse[0][1]
+                ellipse_minor_axis = ellipse[1][0]
+                ellipse_majo_axis = ellipse[1][1]
+                ellipse_angle = ellipse[2]
+                if dbg:
+                    print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
+                    print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
+                    print('=> Ellipse major axis length: %f' % (ellipse_majo_axis))
+                    print('=> Ellipse angle: %f (degree)' % (ellipse_angle))
+                '''
+                print(ellipse)
+                drawing_color_bgr = (0, 255, 0)
+                thickness = 1
+                cv2.ellipse(img_numpy, ellipse, drawing_color_bgr, thickness)
+                '''
 
     if args.projection_estimation:
         if args.video is not None:
