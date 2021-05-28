@@ -319,25 +319,42 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             # len(masks_contours) should be 1 but sometimes misjudgment will appear
             for k in reversed(range(len(masks_contours))):
                 ellipse = cv2.fitEllipse(masks_contours[k])
-                ellipse_center_x = ellipse[0][0]
-                ellipse_center_y = ellipse[0][1]
+                #print(ellipse)
+                ellipse_center_x = round(ellipse[0][0])
+                ellipse_center_y = round(ellipse[0][1])
                 ellipse_minor_axis = ellipse[1][0]
-                ellipse_majo_axis = ellipse[1][1]
+                ellipse_major_axis = ellipse[1][1]
                 ellipse_angle = ellipse[2]
-                if ellipse_majo_axis < comm.SCALE_CAR_WIDTH or ellipse_majo_axis > comm.SCALE_CAR_LENGTH:
-                    print('Warning: skip object %d contour %d' % (j, k))
-                    continue
                 if dbg:
                     print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
                     print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
-                    print('=> Ellipse major axis length: %f' % (ellipse_majo_axis))
+                    print('=> Ellipse major axis length: %f' % (ellipse_major_axis))
                     print('=> Ellipse angle: %f (degree)' % (ellipse_angle))
+
+                if ellipse_major_axis > comm.SCALE_CAR_LENGTH * 1.33 or ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.1 :
+                    print('Warning: skip object %d contour %d (unreasonable length of major axis)' % (j, k))
+                    continue
+                elif ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.67:
+                    print('Warning: skip object %d contour %d (length of major axis is too short to estimation)' % (j, k))
+                    ellipse_angle = -1
+
                 '''
                 print(ellipse)
                 drawing_color_bgr = (0, 255, 0)
                 thickness = 1
                 cv2.ellipse(img_numpy, ellipse, drawing_color_bgr, thickness)
                 '''
+
+                # show angle
+                if ellipse_angle >= 0:
+                    text_str = 'Theta: %.3f' % (ellipse_angle)
+                    text_pt = (ellipse_center_x, ellipse_center_y - 26)
+                    font_face = cv2.FONT_HERSHEY_DUPLEX
+                    font_scale = 0.8
+                    text_color_bgr = (255, 255, 255)
+                    font_thickness = 1
+                    text_line_type = cv2.LINE_AA
+                    cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
 
     if args.projection_estimation:
         if args.video is not None:
