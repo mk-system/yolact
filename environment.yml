@@ -31,4 +31,4 @@ dependencies:
     - pycocotools 
 # Workaround for fix `Could not load the Qt platform plugin "xcb"` issue is 'pip uninstall PyQt5' in Conda environment
     #- PyQt5 # needed on KDE/Qt envs for matplotlib
-
+    - sympy
