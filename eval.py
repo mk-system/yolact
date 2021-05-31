@@ -320,8 +320,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             for k in reversed(range(len(masks_contours))):
                 ellipse = cv2.fitEllipse(masks_contours[k])
                 #print(ellipse)
-                ellipse_center_x = round(ellipse[0][0])
-                ellipse_center_y = round(ellipse[0][1])
+                ellipse_center_x = ellipse[0][0]
+                ellipse_center_y = ellipse[0][1]
                 ellipse_minor_axis = ellipse[1][0]
                 ellipse_major_axis = ellipse[1][1]
                 ellipse_angle = ellipse[2]
@@ -330,6 +330,14 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
                     print('=> Ellipse major axis length: %f' % (ellipse_major_axis))
                     print('=> Ellipse angle: %f (degree)' % (ellipse_angle))
+
+                if (math.isnan(ellipse_center_x) or math.isnan(ellipse_center_y) or
+                        math.isnan(ellipse_minor_axis) or math.isnan(ellipse_minor_axis)):
+                    print('Warning: skip object %d contour %d (no fitable ellipse)' % (j, k))
+                    continue
+                else:
+                    ellipse_center_x = round(ellipse_center_x)
+                    ellipse_center_y = round(ellipse_center_y)
 
                 if ellipse_major_axis > comm.SCALE_CAR_LENGTH * 1.33 or ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.1 :
                     print('Warning: skip object %d contour %d (unreasonable length of major axis)' % (j, k))
