@@ -34,7 +34,7 @@ import math
 import utils.aruco_pose_est as ar_pose_est
 import web.server as web_server
 import threading
-
+from sympy import *
 from params import comm
 
 def str2bool(v):
@@ -326,6 +326,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 ellipse_major_axis = ellipse[1][1]
                 ellipse_angle = ellipse[2]
                 if dbg:
+                    print('Contour %d' % (k))
                     print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
                     print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
                     print('=> Ellipse major axis length: %f' % (ellipse_major_axis))
@@ -336,8 +337,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     print('Warning: skip object %d contour %d (no fitable ellipse)' % (j, k))
                     continue
                 else:
-                    ellipse_center_x = round(ellipse_center_x)
-                    ellipse_center_y = round(ellipse_center_y)
+                    ellipse_center_x_int = round(ellipse_center_x)
+                    ellipse_center_y_int = round(ellipse_center_y)
 
                 if ellipse_major_axis > comm.SCALE_CAR_LENGTH * 1.33 or ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.1 :
                     print('Warning: skip object %d contour %d (unreasonable length of major axis)' % (j, k))
@@ -356,13 +357,45 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 # show angle
                 if ellipse_angle >= 0:
                     text_str = 'Theta: %.3f' % (ellipse_angle)
-                    text_pt = (ellipse_center_x, ellipse_center_y - 26)
+                    text_pt = (ellipse_center_x_int, ellipse_center_y_int - 26)
                     font_face = cv2.FONT_HERSHEY_DUPLEX
                     font_scale = 0.8
                     text_color_bgr = (255, 255, 255)
                     font_thickness = 1
                     text_line_type = cv2.LINE_AA
                     cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+
+                    # find the equation of line for major axis, quadrant I
+                    x0 = ellipse_center_x
+                    y0 = ellipse_center_y
+                    ellipse_angle_rad = math.radians(ellipse_angle - 90)
+                    slope = math.tan(ellipse_angle_rad)
+                    x = Symbol('x')
+                    y = Symbol('y')
+                    major_axis_equation = slope * (x - x0) + y0 - y # point slope form
+                    if dbg:
+                        print('=> Ellipse major axis: %s = 0' % (major_axis_equation))
+
+                    # find the endpoint on the major axis
+                    condition_eq = (x - x0)**2 + (y - y0)**2 - (ellipse_major_axis / 2)**2
+                    if dbg:
+                        print('=> Ellipse major axis length condition: %s = 0' % (condition_eq))
+
+                    # solve the equation
+                    solution = solve([major_axis_equation, condition_eq], [x, y])
+                    if dbg:
+                        print(solution)
+                    '''
+                    major_axis_x1_int = int(solution[0][0])
+                    major_axis_y1_int = int(solution[0][1])
+                    major_axis_x2_int = int(solution[1][0])
+                    major_axis_y2_int = int(solution[1][1])
+                    major_axis_ep0_int = (major_axis_x1_int, major_axis_y1_int)
+                    major_axis_ep1_int = (major_axis_x2_int, major_axis_y2_int)
+                    drawing_color_bgr = (255, 0, 0)
+                    thickness = 1
+                    cv2.line(img_numpy, major_axis_ep0_int, major_axis_ep1_int, drawing_color_bgr, thickness)
+                    '''
 
     if args.projection_estimation:
         if args.video is not None:
