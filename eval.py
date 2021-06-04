@@ -158,12 +158,6 @@ camera_matrix = None
 dist_coeffs = None
 
 def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, mask_alpha=0.45, fps_str=''):
-    ellipse_center = None
-    major_axis_equation = None
-    major_axis_ep0_int = None
-    major_axis_ep1_int = None
-    intersection_pt = []
-
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
     """
@@ -299,6 +293,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
             if dbg:
                 print('Estimate the angle of detected object %d' % (j))
 
+            bbox_x1, bbox_y1, bbox_x2, bbox_y2 = boxes[j, :]
+
             masks_clone = torch.zeros(0)
             masks_clone = torch.reshape(masks[j], (masks[j].shape[0], masks[j].shape[1]))
             masks_clone = masks_clone.byte() #masks_clone.to(torch.uint8)
@@ -326,6 +322,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
             # len(masks_contours) should be 1 but sometimes misjudgment will appear
             for k in reversed(range(len(masks_contours))):
+                intersection_pt = []
+
                 ellipse = cv2.fitEllipse(masks_contours[k])
                 #print(ellipse)
                 ellipse_center_x = ellipse[0][0]
@@ -404,8 +402,6 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                         major_axis_ep1_int = (major_axis_x1_int, major_axis_y1_int)
                         major_axis_ep0_int = (major_axis_x2_int, major_axis_y2_int)
 
-                    ellipse_center = (ellipse_center_x, ellipse_center_y)
-
                     for point_x in range(max(0, major_axis_ep0_int[0]), min(major_axis_ep1_int[0], image.INPUT_IMAGE_WIDTH_PIXEL)):
                         point_y = slope * (point_x - major_axis_ep1_int[0]) + major_axis_ep1_int[1]
                         point_y = int(point_y)
@@ -432,113 +428,67 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     cv2.line(img_numpy, major_axis_ep0_int, major_axis_ep1_int, drawing_color_bgr, thickness)
                     '''
 
-    if args.projection_estimation:
-        if args.video is not None:
-            dbg = False
-        else:
-            dbg = True
-        img_height, img_width, img_channels = img_numpy.shape
-        if img_height != image.INPUT_IMAGE_HEIGHT_PIXEL or img_width != image.INPUT_IMAGE_WIDTH_PIXEL:
-            msg = 'Error: 3D projection only support the resolution %dx%d' % (image.INPUT_IMAGE_WIDTH_PIXEL, image.INPUT_IMAGE_HEIGHT_PIXEL)
-            print(msg)
-            return img_numpy
+                # find projection point L
+                img_height, img_width, img_channels = img_numpy.shape
+                if img_height != image.INPUT_IMAGE_HEIGHT_PIXEL or img_width != image.INPUT_IMAGE_WIDTH_PIXEL:
+                    msg = 'Error: 3D projection only support the resolution %dx%d' % (image.INPUT_IMAGE_WIDTH_PIXEL, image.INPUT_IMAGE_HEIGHT_PIXEL)
+                    print(msg)
+                    return img_numpy
 
-        projected_point_x = None
-        projected_point_y = None
-        for j in reversed(range(num_dets_to_consider)):
-            bbox_x1, bbox_y1, bbox_x2, bbox_y2 = boxes[j, :]
-            if dbg:
-                msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-                print(msg)
-
-            if (major_axis_equation is not None and
-                    major_axis_ep0_int is not None and
-                    major_axis_ep1_int is not None):
-                major_axis_ep0_x = major_axis_ep0_int[0]
-                major_axis_ep0_y = major_axis_ep0_int[1]
-                major_axis_ep1_x = major_axis_ep1_int[0]
-                major_axis_ep1_y = major_axis_ep1_int[1]
-                if (major_axis_ep1_x <= image.INPUT_IMAGE_WIDTH_PIXEL and
-                        major_axis_ep1_x> 0 and
-                        major_axis_ep1_y <= image.INPUT_IMAGE_HEIGHT_PIXEL and
-                        major_axis_ep1_y > 0):
-                    # find the point L on the major axis from front
-                    if dbg:
-                        print('=> From front of the car')
-                    L_front_offset_img_x = car.CAR_FRONT_OVERHANG_MM * comm.SCALE_RATIO
-                    x = Symbol('x')
-                    y = Symbol('y')
-                    condition_eq = (x - major_axis_ep1_x)**2 + (y - major_axis_ep1_y)**2 - (L_front_offset_img_x)**2
-                    solution = solve([major_axis_equation, condition_eq], [x, y])
-                    if solution[0][0] < solution[1][0]:
-                        projected_point_x = int(solution[0][0])
-                        projected_point_y = int(solution[0][1])
-                    else:
-                        projected_point_x = int(solution[1][0])
-                        projected_point_y = int(solution[1][1])
-                '''
-                elif (major_axis_ep0_x <= image.INPUT_IMAGE_WIDTH_PIXEL and
-                        major_axis_ep0_x > 0 and
-                        major_axis_ep0_y <= image.INPUT_IMAGE_HEIGHT_PIXEL and
-                        major_axis_ep0_y > 0):
-                    # find the point L from front
-                    if dbg:
-                        print('=> From back of the car')
-                    L_back_offset_img_x = (car.CAR_REAR_OVERHANG_MM + car. CAR_WHEELBASE) * comm.SCALE_RATIO
-                    x = Symbol('x')
-                    y = Symbol('y')
-                    condition_eq = (x - major_axis_ep0_x)**2 + (y - major_axis_ep0_y)**2 - (L_back_offset_img_x)**2
-                    solution = solve([major_axis_equation, condition_eq], [x, y])
-                    if solution[0][0] < solution[1][0]:
-                        projected_point_x = int(solution[1][0])
-                        projected_point_y = int(solution[1][1])
-                    else:
-                        projected_point_x = int(solution[0][0])
-                        projected_point_y = int(solution[0][1])
-                else:
-                    # find the point L from center
-                    if dbg:
-                        print('=> From center of the car')
-                    L_center_offset_img_x = (car.CAR_LENGTH_MM / 2 - car.CAR_FRONT_OVERHANG_MM) * comm.SCALE_RATIO
-                    ellipse_center_x = ellipse_center[0]
-                    ellipse_center_y = ellipse_center[1]
-                    x = Symbol('x')
-                    y = Symbol('y')
-                    condition_eq = (x - ellipse_center_x)**2 + (y - ellipse_center_y)**2 - (L_center_offset_img_x)**2
-                    solution = solve([major_axis_equation, condition_eq], [x, y])
-                    if solution[0][0] < solution[1][0]:
-                        projected_point_x = int(solution[1][0])
-                        projected_point_y = int(solution[1][1])
-                    else:
-                        projected_point_x = int(solution[0][0])
-                        projected_point_y = int(solution[0][1])
-                '''
-
-            else:
-                print('Error: no angle data to compute point L')
-
-            if (projected_point_x is not None and
-                    projected_point_y is not None):
+                projected_point_x = None
+                projected_point_y = None
                 if dbg:
-                    msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
+                    msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
                     print(msg)
 
-                # drow projected point
-                drawing_color_bgr = (255, 255, 255)
-                drawing_pt = (projected_point_x, projected_point_y)
-                circle_radius_px = 5
-                drawing_line_type = cv2.FILLED
-                cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+                if len(intersection_pt) == 2:
+                    intersection_pt1_x = intersection_pt[1][0]
+                    intersection_pt1_y = intersection_pt[1][1]
+                    # find the point L on the major axis from front
+                    if (intersection_pt1_x <= image.BBOX_VALID_BOUNDARY_X_RIGHT and
+                            intersection_pt1_x> image.BBOX_VALID_BOUNDARY_X_LEFT and
+                            intersection_pt1_y <= image.BBOX_VALID_BOUNDARY_Y_DOWN and
+                            intersection_pt1_y > image.BBOX_VALID_BOUNDARY_Y_UP):
+                        if dbg:
+                            print('=> From front of the car')
 
-                # show projected L position
-                text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
-                text_pt = (projected_point_x - 4, projected_point_y + 26)
-                font_face = cv2.FONT_HERSHEY_DUPLEX
-                font_scale = 0.8
-                text_color_bgr = drawing_color_bgr
-                font_thickness = 1
-                text_line_type = cv2.LINE_AA
-                cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+                        L_front_offset_img_x = car.CAR_FRONT_OVERHANG_MM * comm.SCALE_RATIO
+                        x = Symbol('x')
+                        y = Symbol('y')
+                        condition_eq = (x - intersection_pt1_x)**2 + (y - intersection_pt1_y)**2 - (L_front_offset_img_x)**2
+                        solution = solve([major_axis_equation, condition_eq], [x, y])
+                        if solution[0][0] < solution[1][0]:
+                            projected_point_x = int(solution[0][0])
+                            projected_point_y = int(solution[0][1])
+                        else:
+                            projected_point_x = int(solution[1][0])
+                            projected_point_y = int(solution[1][1])
+
+                    if (projected_point_x is not None and
+                            projected_point_y is not None):
+                        if dbg:
+                            msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
+                            print(msg)
+
+                        # drow projected point
+                        drawing_color_bgr = (255, 255, 255)
+                        drawing_pt = (projected_point_x, projected_point_y)
+                        circle_radius_px = 5
+                        drawing_line_type = cv2.FILLED
+                        cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+
+                        # show projected L position
+                        text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
+                        text_pt = (projected_point_x - 4, projected_point_y + 26)
+                        font_face = cv2.FONT_HERSHEY_DUPLEX
+                        font_scale = 0.8
+                        text_color_bgr = drawing_color_bgr
+                        font_thickness = 1
+                        text_line_type = cv2.LINE_AA
+                        cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+
+                else:
+                    print('Error: no intersection point data to compute projection point L')
 
     if args.ar_marker:
         if args.video is not None:
