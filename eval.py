@@ -162,6 +162,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
     major_axis_equation = None
     major_axis_ep0_int = None
     major_axis_ep1_int = None
+    intersection_pt = []
 
     """
     Note: If undo_transform=False then im_h and im_w are allowed to be None.
@@ -404,6 +405,26 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                         major_axis_ep0_int = (major_axis_x2_int, major_axis_y2_int)
 
                     ellipse_center = (ellipse_center_x, ellipse_center_y)
+
+                    for point_x in range(max(0, major_axis_ep0_int[0]), min(major_axis_ep1_int[0], image.INPUT_IMAGE_WIDTH_PIXEL)):
+                        point_y = slope * (point_x - major_axis_ep1_int[0]) + major_axis_ep1_int[1]
+                        point_y = int(point_y)
+                        point = (point_x, point_y)
+                        if cv2.pointPolygonTest(masks_contours[k], point, False) == 0:
+                            if dbg:
+                                print('=> Find the intersection between major axis and contour: (%d, %d)' % (point_x, point_y))
+
+                            '''
+                            # drow the point
+                            drawing_color_bgr = (255, 255, 255)
+                            drawing_pt = point
+                            circle_radius_px = 5
+                            drawing_line_type = cv2.FILLED
+                            cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+                            '''
+                            intersection_pt.append(point)
+
+                    #print(intersection_pt)
 
                     '''
                     drawing_color_bgr = (255, 0, 0)
