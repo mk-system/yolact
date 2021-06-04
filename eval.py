@@ -486,6 +486,24 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                             projected_point_x = int(solution[0][0])
                             projected_point_y = int(solution[0][1])
 
+                    else:
+                        print('Warning: cannot find reference point')
+                        '''
+                        # find the point L from the center of ellipse
+                        print('Warning: From center of the car')
+                        L_center_offset_img_x = (car.CAR_LENGTH_MM / 2 - car.CAR_FRONT_OVERHANG_MM) * comm.SCALE_RATIO
+                        x = Symbol('x')
+                        y = Symbol('y')
+                        condition_eq = (x - ellipse_center_x)**2 + (y - ellipse_center_y)**2 - (L_center_offset_img_x)**2
+                        solution = solve([major_axis_equation, condition_eq], [x, y])
+                        if solution[0][0] < solution[1][0]:
+                            projected_point_x = int(solution[1][0])
+                            projected_point_y = int(solution[1][1])
+                        else:
+                            projected_point_x = int(solution[0][0])
+                            projected_point_y = int(solution[0][1])
+                        '''
+
                     if (projected_point_x is not None and
                             projected_point_y is not None):
                         if dbg:
