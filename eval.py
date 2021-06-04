@@ -351,7 +351,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     continue
                 elif ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.67:
                     print('Warning: skip object %d contour %d (length of major axis is too short to estimation)' % (j, k))
-                    ellipse_angle = -1
+                    continue
 
                 '''
                 print(ellipse)
@@ -442,6 +442,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                     print(msg)
 
                 if len(intersection_pt) == 2:
+                    intersection_pt0_x = intersection_pt[0][0]
+                    intersection_pt0_y = intersection_pt[0][1]
                     intersection_pt1_x = intersection_pt[1][0]
                     intersection_pt1_y = intersection_pt[1][1]
                     # find the point L on the major axis from front
@@ -463,6 +465,26 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                         else:
                             projected_point_x = int(solution[1][0])
                             projected_point_y = int(solution[1][1])
+
+                    # find the point L on the major axis from back
+                    elif (intersection_pt0_x <= image.BBOX_VALID_BOUNDARY_X_RIGHT and
+                            intersection_pt0_x> image.BBOX_VALID_BOUNDARY_X_LEFT and
+                            intersection_pt0_y <= image.BBOX_VALID_BOUNDARY_Y_DOWN and
+                            intersection_pt0_y > image.BBOX_VALID_BOUNDARY_Y_UP):
+                        if dbg:
+                            print('=> From back of the car')
+
+                        L_back_offset_img_x = (car.CAR_REAR_OVERHANG_MM + car. CAR_WHEELBASE) * comm.SCALE_RATIO
+                        x = Symbol('x')
+                        y = Symbol('y')
+                        condition_eq = (x - intersection_pt0_x)**2 + (y - intersection_pt0_y)**2 - (L_back_offset_img_x)**2
+                        solution = solve([major_axis_equation, condition_eq], [x, y])
+                        if solution[0][0] < solution[1][0]:
+                            projected_point_x = int(solution[1][0])
+                            projected_point_y = int(solution[1][1])
+                        else:
+                            projected_point_x = int(solution[0][0])
+                            projected_point_y = int(solution[0][1])
 
                     if (projected_point_x is not None and
                             projected_point_y is not None):
