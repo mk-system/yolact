@@ -123,10 +123,8 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
-    parser.add_argument('--angle_estimation', default=False, dest='angle_estimation', action='store_true',
-                        help='Estimate the angle of detected object.')
-    parser.add_argument('--projection_estimation', default=False, dest='projection_estimation', action='store_true',
-                        help='Project predefined 3D points to input image.')
+    parser.add_argument('--angle_projection_estimation', default=False, dest='angle_projection_estimation', action='store_true',
+                        help='Estimate the angle of detected object and project predefined 3D points to input image.')
     parser.add_argument('--ar_marker', default=False, dest='ar_marker', action='store_true',
                         help='Project predefined 3D points to input image by ArUco marker.')
     parser.add_argument('--web_server', default=False, dest='web_server', action='store_true',
@@ -134,7 +132,7 @@ def parse_args(argv=None):
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
-                        emulate_playback=False, angle_estimation=False, projection_estimation=False, ar_marker=False, web_server=False)
+                        emulate_playback=False, angle_projection_estimation=False, ar_marker=False, web_server=False)
 
     global args
     args = parser.parse_args(argv)
@@ -283,7 +281,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 cv2.rectangle(img_numpy, (x1, y1), (x1 + text_w, y1 - text_h - 4), color, -1)
                 cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
 
-    if args.angle_estimation:
+    if args.angle_projection_estimation:
         if args.video is not None:
             dbg = False
         else:
