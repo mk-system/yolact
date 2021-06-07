@@ -287,6 +287,9 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
         else:
             dbg = True
 
+        web_server.vehicles_mutex.acquire()
+        web_server.vehicles_list.clear()
+
         for j in reversed(range(num_dets_to_consider)):
             if dbg:
                 print('Estimate the angle of detected object %d' % (j))
@@ -328,7 +331,7 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 ellipse_center_y = ellipse[0][1]
                 ellipse_minor_axis = ellipse[1][0]
                 ellipse_major_axis = ellipse[1][1]
-                ellipse_angle = ellipse[2]
+                ellipse_angle = round(ellipse[2], 3)
                 if dbg:
                     print('Contour %d' % (k))
                     print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
@@ -508,6 +511,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                             msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
                             print(msg)
 
+                        web_server.vehicles_list.append({'x': projected_point_x, 'y': projected_point_y, 'theta': ellipse_angle})
+
                         # drow projected point
                         drawing_color_bgr = (255, 255, 255)
                         drawing_pt = (projected_point_x, projected_point_y)
@@ -527,6 +532,8 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
                 else:
                     print('Error: no intersection point data to compute projection point L')
+
+        web_server.vehicles_mutex.release()
 
     if args.ar_marker:
         if args.video is not None:
