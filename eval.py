@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 import cv2
 from cv2 import aruco
 import math
+from datetime import datetime, timezone
 
 import utils.aruco_pose_est as ar_pose_est
 import web.server as web_server
@@ -289,6 +290,14 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
 
         web_server.vehicles_mutex.acquire()
         web_server.vehicles_list.clear()
+        web_server.datetime_str = ''
+
+        utc_time = datetime.utcnow()
+        local_time = datetime.now()
+        time_delta = local_time - utc_time
+        time_zone = timezone(time_delta)
+        web_server.datetime_str = datetime.now(time_zone).isoformat()
+        #print(web_server.datetime_str)
 
         for j in reversed(range(num_dets_to_consider)):
             if dbg:

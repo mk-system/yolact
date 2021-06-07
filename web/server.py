@@ -52,6 +52,7 @@ class Handler(SimpleHTTPRequestHandler):
 		super().send_response(code, message)
 
 vehicles_list = []
+datetime_str = ''
 vehicles_mutex = threading.Lock()
 class ApiHandler(Handler):
     global vehicles_list
@@ -59,7 +60,7 @@ class ApiHandler(Handler):
     def do_GET(self):
         if self.path == '/api/v1/vehicles.json':
             vehicles_mutex.acquire()
-            vehicles_dict = {'vehicles': vehicles_list}
+            vehicles_dict = {'vehicles': vehicles_list, 'datetime': datetime_str}
             vehicles_mutex.release()
             self.send_json(json.dumps(vehicles_dict))
         else:
