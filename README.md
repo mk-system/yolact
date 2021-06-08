@@ -108,14 +108,14 @@ python eval.py --trained_model=weights/yolact_base_54_800000.pth --benchmark --m
 # Display qualitative results on the specified image.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=my_image.png
 
-# Display 3D projection point by qualitative results on the specified image.
-python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --projection_estimation
+# Display 3D projection point and estimate angle by qualitative results on the specified image.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --angle_projection_estimation
 
 # Display 3D projection point by ARTag on the specified image.
 python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --ar_marker
 
-# Display 3D projection point by qualitative results and ARTag at the same time on the specified image.
-python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --projection_estimation --ar_marker
+# Display 3D projection point and estimate angle by qualitative results and ARTag at the same time on the specified image.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0355.jpg --angle_projection_estimation --ar_marker
 
 # Process an image and save it to another file.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --image=input_image.png:output_image.png
@@ -129,8 +129,8 @@ python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_thresho
 # If you want, use "--display_fps" to draw the FPS directly on the frame.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=my_video.mp4
 
-# Display 3D projection point by qualitative results and ARTag at the same time on the specified video.
-python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=CAM3_20210407171423.wmv --projection_estimation --ar_marker
+# Display 3D projection point and estimate angle by qualitative results and ARTag at the same time on the specified video.
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=CAM3_20210407171423.wmv --angle_projection_estimation --ar_marker
 
 # Display a webcam feed in real-time. If you have multiple webcams pass the index of the webcam you want instead of 0.
 python eval.py --trained_model=weights/yolact_base_54_800000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=0
@@ -147,10 +147,10 @@ python eval.py --help
  - Use `curl http://127.0.0.1:6337/api/v1/vehicles.json` to get vehicles position
 ```Shell
 # For image
-python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0300.jpg --projection_estimation --web_server
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --image=CAM3_20210407171423_0300.jpg --angle_projection_estimation --web_server
 
 #For Video
-python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=CAM1_20210407171426.wmv --projection_estimation --web_server
+python eval.py --trained_model=weights/yolact_resnet50_custom_144_20000.pth --score_threshold=0.15 --top_k=15 --video_multiframe=4 --video=CAM1_20210407171426.wmv --angle_projection_estimation --web_server
 ```
 
 # Training
