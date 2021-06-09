@@ -30,10 +30,15 @@ import matplotlib.pyplot as plt
 import cv2
 from cv2 import aruco
 import math
+from datetime import datetime, timezone
 
 import utils.aruco_pose_est as ar_pose_est
 import web.server as web_server
 import threading
+from sympy import *
+from params import car
+from params import comm
+from params import image
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
@@ -119,8 +124,8 @@ def parse_args(argv=None):
                         help='When displaying / saving video, draw the FPS on the frame')
     parser.add_argument('--emulate_playback', default=False, dest='emulate_playback', action='store_true',
                         help='When saving a video, emulate the framerate that you\'d get running in real-time mode.')
-    parser.add_argument('--projection_estimation', default=False, dest='projection_estimation', action='store_true',
-                        help='Project predefined 3D points to input image.')
+    parser.add_argument('--angle_projection_estimation', default=False, dest='angle_projection_estimation', action='store_true',
+                        help='Estimate the angle of detected object and project predefined 3D points to input image.')
     parser.add_argument('--ar_marker', default=False, dest='ar_marker', action='store_true',
                         help='Project predefined 3D points to input image by ArUco marker.')
     parser.add_argument('--web_server', default=False, dest='web_server', action='store_true',
@@ -128,7 +133,7 @@ def parse_args(argv=None):
 
     parser.set_defaults(no_bar=False, display=False, resume=False, output_coco_json=False, output_web_json=False, shuffle=False,
                         benchmark=False, no_sort=False, no_hash=False, mask_proto_debug=False, crop=True, detect=False, display_fps=False,
-                        emulate_playback=False, projection_estimation=False, ar_marker=False, web_server=False)
+                        emulate_playback=False, angle_projection_estimation=False, ar_marker=False, web_server=False)
 
     global args
     args = parser.parse_args(argv)
@@ -277,171 +282,267 @@ def prep_display(dets_out, img, h, w, undo_transform=True, class_color=False, ma
                 cv2.rectangle(img_numpy, (x1, y1), (x1 + text_w, y1 - text_h - 4), color, -1)
                 cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color, font_thickness, cv2.LINE_AA)
 
-    if args.projection_estimation:
+    if args.angle_projection_estimation:
         if args.video is not None:
             dbg = False
         else:
             dbg = True
-        if dbg:
-            print('Project predefined 3D points to input image')
-        # this focal length is only for the resolution 1224x1024
-        CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL = 675.85856318
-        INPUT_IMAGE_WIDTH_PIXEL = 1224
-        INPUT_IMAGE_HEIGHT_PIXEL = 1024
-        WORLD_WIDTH_MM = 4400
-        FOV_X_RADIANS = 1.4717073333932587
-        #FOV_X_DEGREES = 84.32261888188648
-        OBIECT_DISTANCE_MM = 2429.556926464052
-        FRONT_OVERHANG_MM = 870
-        REAR_OVERHANG_MM = 930
-        WHEELBASE = 2600
-        BBOX_VALID_BOUNDARY_X_LEFT = 20
-        BBOX_VALID_BOUNDARY_X_RIGHT = INPUT_IMAGE_WIDTH_PIXEL - BBOX_VALID_BOUNDARY_X_LEFT
-        img_height, img_width, img_channels = img_numpy.shape
-        if img_height != INPUT_IMAGE_HEIGHT_PIXEL or img_width != INPUT_IMAGE_WIDTH_PIXEL:
-            msg = 'Error: 3D projection only support the resolution %dx%d' % (INPUT_IMAGE_WIDTH_PIXEL, INPUT_IMAGE_HEIGHT_PIXEL)
-            print(msg)
-            return img_numpy
 
-        #fov_x_rads = fov_cal_rads(INPUT_IMAGE_WIDTH_PIXEL, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL)
-        fov_x_rads = FOV_X_RADIANS
-        #fov_x_degs = math.degrees(fov_x_rads)
-        #object_distance = (WORLD_WIDTH_MM / 2) / math.tan(fov_x_rads / 2)
-        object_distance = OBIECT_DISTANCE_MM
-        #print(fov_x_rads)
-        #print(fov_x_degs)
-        #print(object_distance)
+        web_server.vehicles_mutex.acquire()
+        web_server.vehicles_list.clear()
+        web_server.datetime_str = ''
+
+        utc_time = datetime.utcnow()
+        local_time = datetime.now()
+        time_delta = local_time - utc_time
+        time_zone = timezone(time_delta)
+        web_server.datetime_str = datetime.now(time_zone).isoformat()
+        #print(web_server.datetime_str)
 
         for j in reversed(range(num_dets_to_consider)):
-            # find projected y (center of the BBox in y-direction)
-            bbox_x1, bbox_y1, bbox_x2, bbox_y2 = boxes[j, :]
             if dbg:
-                msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
-                print(msg)
-            projected_point_y = round((bbox_y2 - bbox_y1) / 2) + bbox_y1
-            projected_point_y = projected_point_y.item() # convert numpy.int64 to int
+                print('Estimate the angle of detected object %d' % (j))
 
-            # find projected x (perspective projection in x-direction) from front
-            if x2 < BBOX_VALID_BOUNDARY_X_RIGHT:
+            bbox_x1, bbox_y1, bbox_x2, bbox_y2 = boxes[j, :]
+
+            masks_clone = torch.zeros(0)
+            masks_clone = torch.reshape(masks[j], (masks[j].shape[0], masks[j].shape[1]))
+            masks_clone = masks_clone.byte() #masks_clone.to(torch.uint8)
+            masks_bin_img = masks_clone.cpu().numpy()
+            #masks_bin_img = masks_bin_img.astype(np.uint8)
+            '''
+            print("masks_bin_img.shape: ", end = '')
+            print(masks_bin_img.shape)
+            print("masks_bin_img.dtype: ", end = '')
+            print(masks_bin_img.dtype)
+            '''
+
+            masks_contours, contours_hierarchy = cv2.findContours(
+                    masks_bin_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            '''
+            masks_contours_img = np.zeros(masks_bin_img.shape, dtype='uint8')
+            contourIdx = -1 # If it is negative, all the contours are drawn.
+            color = 255 # White
+            thickness = 1
+            cv2.drawContours(masks_contours_img, masks_contours, contourIdx, color, thickness)
+            cv2.imshow('masks_contours_img', masks_contours_img)
+            print('Press any key to continue...')
+            cv2.waitKey(0)
+            '''
+
+            # len(masks_contours) should be 1 but sometimes misjudgment will appear
+            for k in reversed(range(len(masks_contours))):
+                intersection_pt = []
+
+                ellipse = cv2.fitEllipse(masks_contours[k])
+                #print(ellipse)
+                ellipse_center_x = ellipse[0][0]
+                ellipse_center_y = ellipse[0][1]
+                ellipse_minor_axis = ellipse[1][0]
+                ellipse_major_axis = ellipse[1][1]
+                ellipse_angle = round(ellipse[2], 3)
                 if dbg:
-                    print('= >From front of the car')
-                center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x2
-                camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
-                camera_yaw_degs = math.degrees(camera_yaw_rads)
-                if dbg:
-                    msg = '=> Camera yaw: %.2f degrees' % (camera_yaw_degs)
-                    print(msg)
+                    print('Contour %d' % (k))
+                    print('=> Ellipse center: (%f, %f)' % (ellipse_center_x, ellipse_center_y))
+                    print('=> Ellipse minor axis length: %f' % (ellipse_minor_axis))
+                    print('=> Ellipse major axis length: %f' % (ellipse_major_axis))
+                    print('=> Ellipse angle: %f (degree)' % (ellipse_angle))
 
-                center_offset_wrd_x = object_distance * math.tan(camera_yaw_rads)
-                L_center_offset_wrd_x = center_offset_wrd_x + FRONT_OVERHANG_MM
-                if L_center_offset_wrd_x < WORLD_WIDTH_MM / 2:
-                    if dbg:
-                        msg = '=> L offset (world): %d' % (L_center_offset_wrd_x)
-                        print(msg)
+                if (math.isnan(ellipse_center_x) or math.isnan(ellipse_center_y) or
+                        math.isnan(ellipse_minor_axis) or math.isnan(ellipse_minor_axis)):
+                    print('Warning: skip object %d contour %d (no fitable ellipse)' % (j, k))
+                    continue
+                else:
+                    ellipse_center_x_int = round(ellipse_center_x)
+                    ellipse_center_y_int = round(ellipse_center_y)
 
-                    L_yaw_rads = fov_cal_rads(2 * L_center_offset_wrd_x, OBIECT_DISTANCE_MM) / 2
-                    L_center_offset_img_x = CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL * math.tan(L_yaw_rads)
-                    if dbg:
-                        msg = '=> L offset (image): %d' % (L_center_offset_img_x)
-                        print(msg)
+                if ellipse_major_axis > comm.SCALE_CAR_LENGTH * 1.33 or ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.1 :
+                    print('Warning: skip object %d contour %d (unreasonable length of major axis)' % (j, k))
+                    continue
+                elif ellipse_major_axis < comm.SCALE_CAR_LENGTH * 0.67:
+                    print('Warning: skip object %d contour %d (length of major axis is too short to estimation)' % (j, k))
+                    continue
 
-                    projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
-                    projected_point_x = round(projected_point_x)
+                '''
+                print(ellipse)
+                drawing_color_bgr = (0, 255, 0)
+                thickness = 1
+                cv2.ellipse(img_numpy, ellipse, drawing_color_bgr, thickness)
+                '''
 
-                    web_server.vehicles_mutex.acquire()
-                    web_server.vehicles_list.clear()
-                    web_server.vehicles_list.append({'x': projected_point_x, 'y': projected_point_y})
-                    web_server.vehicles_mutex.release()
-
-                    if dbg:
-                        msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
-                        print(msg)
-
-                    # drow projected point
-                    drawing_color_bgr = (255, 255, 255)
-                    drawing_pt = (projected_point_x, projected_point_y)
-                    circle_radius_px = 5
-                    drawing_line_type = cv2.FILLED
-                    cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
-
-                    # show projected L position
-                    text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
-                    text_pt = (projected_point_x - 4, projected_point_y + 26)
+                # show angle
+                if ellipse_angle >= 0:
+                    text_str = 'Theta: %.3f' % (ellipse_angle)
+                    text_pt = (ellipse_center_x_int, ellipse_center_y_int - 26)
                     font_face = cv2.FONT_HERSHEY_DUPLEX
                     font_scale = 0.8
-                    text_color_bgr = drawing_color_bgr
+                    text_color_bgr = (255, 255, 255)
                     font_thickness = 1
                     text_line_type = cv2.LINE_AA
                     cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
 
-                else:
-                    web_server.vehicles_mutex.acquire()
-                    web_server.vehicles_list.clear()
-                    web_server.vehicles_mutex.release()
+                    # find the equation of line for major axis, quadrant I
+                    x0 = ellipse_center_x
+                    y0 = ellipse_center_y
+                    ellipse_angle_rad = math.radians(ellipse_angle - 90)
+                    slope = math.tan(ellipse_angle_rad)
+                    x = Symbol('x')
+                    y = Symbol('y')
+                    major_axis_equation = slope * (x - x0) + y0 - y # point slope form
+                    if dbg:
+                        print('=> Ellipse major axis: %s = 0' % (major_axis_equation))
 
-            # find projected x (perspective projection in x-direction) from back
-            elif x1 > BBOX_VALID_BOUNDARY_X_LEFT:
+                    # find the endpoint on the major axis
+                    condition_eq = (x - x0)**2 + (y - y0)**2 - (ellipse_major_axis / 2)**2
+                    if dbg:
+                        print('=> Ellipse major axis length condition: %s = 0' % (condition_eq))
+
+                    # solve the equation
+                    solution = solve([major_axis_equation, condition_eq], [x, y])
+                    if dbg:
+                        print(solution)
+                    major_axis_x1_int = int(solution[0][0])
+                    major_axis_y1_int = int(solution[0][1])
+                    major_axis_x2_int = int(solution[1][0])
+                    major_axis_y2_int = int(solution[1][1])
+                    if major_axis_x2_int >= major_axis_x1_int:
+                        major_axis_ep0_int = (major_axis_x1_int, major_axis_y1_int)
+                        major_axis_ep1_int = (major_axis_x2_int, major_axis_y2_int)
+                    else:
+                        major_axis_ep1_int = (major_axis_x1_int, major_axis_y1_int)
+                        major_axis_ep0_int = (major_axis_x2_int, major_axis_y2_int)
+
+                    for point_x in range(max(0, major_axis_ep0_int[0]), min(major_axis_ep1_int[0], image.INPUT_IMAGE_WIDTH_PIXEL)):
+                        point_y = slope * (point_x - major_axis_ep1_int[0]) + major_axis_ep1_int[1]
+                        point_y = int(point_y)
+                        point = (point_x, point_y)
+                        if cv2.pointPolygonTest(masks_contours[k], point, False) == 0:
+                            if dbg:
+                                print('=> Find the intersection between major axis and contour: (%d, %d)' % (point_x, point_y))
+
+                            '''
+                            # drow the point
+                            drawing_color_bgr = (255, 255, 255)
+                            drawing_pt = point
+                            circle_radius_px = 5
+                            drawing_line_type = cv2.FILLED
+                            cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+                            '''
+                            intersection_pt.append(point)
+
+                    #print(intersection_pt)
+
+                    '''
+                    drawing_color_bgr = (255, 0, 0)
+                    thickness = 1
+                    cv2.line(img_numpy, major_axis_ep0_int, major_axis_ep1_int, drawing_color_bgr, thickness)
+                    '''
+
+                # find projection point L
+                img_height, img_width, img_channels = img_numpy.shape
+                if img_height != image.INPUT_IMAGE_HEIGHT_PIXEL or img_width != image.INPUT_IMAGE_WIDTH_PIXEL:
+                    msg = 'Error: 3D projection only support the resolution %dx%d' % (image.INPUT_IMAGE_WIDTH_PIXEL, image.INPUT_IMAGE_HEIGHT_PIXEL)
+                    print(msg)
+                    return img_numpy
+
+                projected_point_x = None
+                projected_point_y = None
                 if dbg:
-                    print('=> From back of the car')
-                center_offset_img_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - x1
-                camera_yaw_rads = fov_cal_rads(2 * center_offset_img_x, CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL) / 2
-                camera_yaw_degs = math.degrees(camera_yaw_rads)
-                if dbg:
-                    msg = '=> Camera yaw: %.2f degrees' % (camera_yaw_degs)
+                    msg = '=> BBox: (%d, %d), (%d, %d)' % (bbox_x1, bbox_y1, bbox_x2, bbox_y2)
                     print(msg)
 
-                center_offset_wrd_x = object_distance * math.tan(camera_yaw_rads)
-                L_center_offset_wrd_x = center_offset_wrd_x - REAR_OVERHANG_MM - WHEELBASE
-                if L_center_offset_wrd_x >  -WORLD_WIDTH_MM / 2:
-                    if dbg:
-                        msg = '=> L offset (world): %d' % (L_center_offset_wrd_x)
-                        print(msg)
+                if len(intersection_pt) == 2:
+                    intersection_pt0_x = intersection_pt[0][0]
+                    intersection_pt0_y = intersection_pt[0][1]
+                    intersection_pt1_x = intersection_pt[1][0]
+                    intersection_pt1_y = intersection_pt[1][1]
+                    # find the point L on the major axis from front
+                    if (intersection_pt1_x <= image.BBOX_VALID_BOUNDARY_X_RIGHT and
+                            intersection_pt1_x> image.BBOX_VALID_BOUNDARY_X_LEFT and
+                            intersection_pt1_y <= image.BBOX_VALID_BOUNDARY_Y_DOWN and
+                            intersection_pt1_y > image.BBOX_VALID_BOUNDARY_Y_UP):
+                        if dbg:
+                            print('=> From front of the car')
 
-                    L_yaw_rads = fov_cal_rads(2 * L_center_offset_wrd_x, OBIECT_DISTANCE_MM) / 2
-                    L_center_offset_img_x = CAMERA_MATRIX_FOCAL_LENGTH_X_PIXEL * math.tan(L_yaw_rads)
-                    if dbg:
-                        msg = '=> L offset (image): %d' % (L_center_offset_img_x)
-                        print(msg)
+                        L_front_offset_img_x = car.CAR_FRONT_OVERHANG_MM * comm.SCALE_RATIO
+                        x = Symbol('x')
+                        y = Symbol('y')
+                        condition_eq = (x - intersection_pt1_x)**2 + (y - intersection_pt1_y)**2 - (L_front_offset_img_x)**2
+                        solution = solve([major_axis_equation, condition_eq], [x, y])
+                        if solution[0][0] < solution[1][0]:
+                            projected_point_x = int(solution[0][0])
+                            projected_point_y = int(solution[0][1])
+                        else:
+                            projected_point_x = int(solution[1][0])
+                            projected_point_y = int(solution[1][1])
 
-                    projected_point_x = (INPUT_IMAGE_WIDTH_PIXEL / 2) - L_center_offset_img_x
-                    projected_point_x = round(projected_point_x)
+                    # find the point L on the major axis from back
+                    elif (intersection_pt0_x <= image.BBOX_VALID_BOUNDARY_X_RIGHT and
+                            intersection_pt0_x> image.BBOX_VALID_BOUNDARY_X_LEFT and
+                            intersection_pt0_y <= image.BBOX_VALID_BOUNDARY_Y_DOWN and
+                            intersection_pt0_y > image.BBOX_VALID_BOUNDARY_Y_UP):
+                        if dbg:
+                            print('=> From back of the car')
 
-                    web_server.vehicles_mutex.acquire()
-                    web_server.vehicles_list.clear()
-                    web_server.vehicles_list.append({'x': projected_point_x, 'y': projected_point_y})
-                    web_server.vehicles_mutex.release()
+                        L_back_offset_img_x = (car.CAR_REAR_OVERHANG_MM + car. CAR_WHEELBASE) * comm.SCALE_RATIO
+                        x = Symbol('x')
+                        y = Symbol('y')
+                        condition_eq = (x - intersection_pt0_x)**2 + (y - intersection_pt0_y)**2 - (L_back_offset_img_x)**2
+                        solution = solve([major_axis_equation, condition_eq], [x, y])
+                        if solution[0][0] < solution[1][0]:
+                            projected_point_x = int(solution[1][0])
+                            projected_point_y = int(solution[1][1])
+                        else:
+                            projected_point_x = int(solution[0][0])
+                            projected_point_y = int(solution[0][1])
 
-                    if dbg:
-                        msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
-                        print(msg)
+                    else:
+                        print('Warning: cannot find reference point')
+                        '''
+                        # find the point L from the center of ellipse
+                        print('Warning: From center of the car')
+                        L_center_offset_img_x = (car.CAR_LENGTH_MM / 2 - car.CAR_FRONT_OVERHANG_MM) * comm.SCALE_RATIO
+                        x = Symbol('x')
+                        y = Symbol('y')
+                        condition_eq = (x - ellipse_center_x)**2 + (y - ellipse_center_y)**2 - (L_center_offset_img_x)**2
+                        solution = solve([major_axis_equation, condition_eq], [x, y])
+                        if solution[0][0] < solution[1][0]:
+                            projected_point_x = int(solution[1][0])
+                            projected_point_y = int(solution[1][1])
+                        else:
+                            projected_point_x = int(solution[0][0])
+                            projected_point_y = int(solution[0][1])
+                        '''
 
-                    # drow projected point
-                    drawing_color_bgr = (255, 255, 255)
-                    drawing_pt = (projected_point_x, projected_point_y)
-                    circle_radius_px = 5
-                    drawing_line_type = cv2.FILLED
-                    cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+                    if (projected_point_x is not None and
+                            projected_point_y is not None):
+                        if dbg:
+                            msg = '=> L(%d, %d)' % (projected_point_x, projected_point_y)
+                            print(msg)
 
-                    # show projected L position
-                    text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
-                    text_pt = (projected_point_x - 4, projected_point_y + 26)
-                    font_face = cv2.FONT_HERSHEY_DUPLEX
-                    font_scale = 0.8
-                    text_color_bgr = drawing_color_bgr
-                    font_thickness = 1
-                    text_line_type = cv2.LINE_AA
-                    cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
+                        web_server.vehicles_list.append({'x': projected_point_x, 'y': projected_point_y, 'theta': ellipse_angle})
+
+                        # drow projected point
+                        drawing_color_bgr = (255, 255, 255)
+                        drawing_pt = (projected_point_x, projected_point_y)
+                        circle_radius_px = 5
+                        drawing_line_type = cv2.FILLED
+                        cv2.circle(img_numpy, drawing_pt, circle_radius_px, drawing_color_bgr, drawing_line_type)
+
+                        # show projected L position
+                        text_str = 'L(%d, %d)' % (projected_point_x, projected_point_y)
+                        text_pt = (projected_point_x - 4, projected_point_y + 26)
+                        font_face = cv2.FONT_HERSHEY_DUPLEX
+                        font_scale = 0.8
+                        text_color_bgr = drawing_color_bgr
+                        font_thickness = 1
+                        text_line_type = cv2.LINE_AA
+                        cv2.putText(img_numpy, text_str, text_pt, font_face, font_scale, text_color_bgr, font_thickness, text_line_type)
 
                 else:
-                    web_server.vehicles_mutex.acquire()
-                    web_server.vehicles_list.clear()
-                    web_server.vehicles_mutex.release()
+                    print('Error: no intersection point data to compute projection point L')
 
-            else:
-                print('Warning: cannot find reference point')
-                web_server.vehicles_mutex.acquire()
-                web_server.vehicles_list.clear()
-                web_server.vehicles_mutex.release()
+        web_server.vehicles_mutex.release()
 
     if args.ar_marker:
         if args.video is not None:

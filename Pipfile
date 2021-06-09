@@ -13,6 +13,7 @@ pillow = "*"
 pycocotools = "*"
 matplotlib = "*"
 opencv-contrib-python = "*"
+sympy = "*"
 
 [dev-packages]
 
